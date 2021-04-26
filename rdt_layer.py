@@ -139,15 +139,28 @@ class RDTLayer(object):
         # send the segment
 
         # TODO: flow control window?
+        if(len(self.receiveChannel.receiveQueue) != 0):
+            print("rec queue",self.receiveChannel.receiveQueue[0].acknum)
 
         if(self.dataToSend != ""):
             # if there is data to send, we make that into a packet of size 4 and send that
             # we then need to make sure that it keeps doing this
+
+            # window will be 5 items long (5 packets) because each packet has a size of 4 characters
+            # 15 / 4 = 3.75 and I am rounding up
+
+            currentWindowStart = 0 # Index of current window start
+            currentWindowEnd = currentWindowStart+4 # index of current window end
+            print(currentWindowStart, currentWindowEnd)
+
+            # creating a single packet
             seqnum = self.currentIteration-1
-            startPos = seqnum*self.DATA_LENGTH
-            endPos = ((seqnum*self.DATA_LENGTH)+self.DATA_LENGTH)
+            startPos = seqnum*self.DATA_LENGTH # start position of the packet
+            endPos = ((seqnum*self.DATA_LENGTH)+self.DATA_LENGTH) # end position of the packet data
+
             data = self.dataToSend[startPos:endPos]
             segmentSend.setData(seqnum, data)
+
             self.sendChannel.send(segmentSend)
 
 
@@ -162,25 +175,25 @@ class RDTLayer(object):
     # ################################################################################################################ #
     def processReceiveAndSendRespond(self):
         segmentAck = Segment()                  # Segment acknowledging packet(s) received
-        print("send channel", self.sendChannel.sendQueue)
-        print("rec channel", self.receiveChannel.receiveQueue)
+
         # This call returns a list of incoming segments (see Segment class)...
         listIncomingSegments = self.receiveChannel.receive()
-        print("incoming",listIncomingSegments)
 
         # ############################################################################################################ #
         # What segments have been received?
         # How will you get them back in order?
         # This is where a majority of your logic will be implemented
         print('processReceive(): Complete this...')
-        acknum = -1
-        if(len(listIncomingSegments)>0):
-            for i in range (0,len(listIncomingSegments)-1):
-                print( "SENDING AGAIN ",listIncomingSegments[i],listIncomingSegments[i].payload, listIncomingSegments[i].seqnum)
+        currentWindowData = ""
+        if(len(listIncomingSegments)!=0):
+            # if there is data incoming
+            for i in range (0,len(listIncomingSegments)):
                 acknum = listIncomingSegments[i].seqnum
+                currentWindowData += listIncomingSegments[i].payload
                 segmentAck.setAck(acknum)
+                print(acknum)
                 self.sendChannel.send(segmentAck)
-
+            print("curr data", currentWindowData)
 
 
 
