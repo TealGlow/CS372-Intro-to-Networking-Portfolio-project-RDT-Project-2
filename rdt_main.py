@@ -18,9 +18,9 @@ from unreliable import UnreliableChannel
 
 dataToSend = "The quick brown fox jumped over the lazy dog"
 
-# dataToSend = "\r\n\r\n...We choose to go to the moon. We choose to go to the moon in this "\
-# "decade and do the other things, not because they are easy, but because they are hard, "\
-# "because that goal will serve to organize and measure the best of our energies and skills, "\
+#dataToSend = "\r\n\r\n...We choose to go to the moon. We choose to go to the moon in this "\
+#"decade and do the other things, not because they are easy, but because they are hard, "\
+#"because that goal will serve to organize and measure the best of our energies and skills, "\
 # "because that challenge is one that we are willing to accept, one we are unwilling to "\
 # "postpone, and one which we intend to win, and the others, too."\
 # "\r\n\r\n"\
@@ -43,7 +43,7 @@ server = RDTLayer()
 
 # Start with a reliable channel (all flags false)
 # As you create your rdt algorithm for send and receive, turn these on.
-outOfOrder = False
+outOfOrder = True
 dropPackets = False
 delayPackets = False
 dataErrors = False
