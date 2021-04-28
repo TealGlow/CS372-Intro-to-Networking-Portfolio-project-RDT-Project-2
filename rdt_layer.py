@@ -148,30 +148,39 @@ class RDTLayer(object):
         # create the segment
         # send the segment
 
+        if(len(self.receiveChannel.receiveQueue) > 0):
+            for j in range(len(self.receiveChannel.receiveQueue)):
+                if(self.receiveChannel.receiveQueue[j].payload == ""):
+                    # get the received acks
+                    print("REC QUEUE",self.receiveChannel.receiveQueue[j].acknum)
+
         seqnum = self.currentSeqNum # set up the current seqnum
 
+        for i in range(self.currentWindowStart, self.currentWindowEnd):
+            if (self.dataToSend != "" and seqnum < len(split_data)):
+                segmentSend = Segment()
+                # if there is data to send, we make that into a packet of size 4 and send that
+                # we then need to make sure that it keeps doing this
 
-        if (self.dataToSend != "" and seqnum < len(split_data)):
-            segmentSend = Segment()
-            # if there is data to send, we make that into a packet of size 4 and send that
-            # we then need to make sure that it keeps doing this
+                # window will be 5 items long (5 packets) because each packet has a size of 4 characters
+                # 15 / 4 = 3.75 and I am rounding up
 
-            # window will be 5 items long (5 packets) because each packet has a size of 4 characters
-            # 15 / 4 = 3.75 and I am rounding up
+                # packet data, packet num in sequence, current window start (index in data that we started), current window end, True if data packet
+                data = [split_data[seqnum],i, self.currentWindowStart, self.currentWindowEnd, True]
+                segmentSend.setData(seqnum, data)
+                seqnum += 1
 
-            data = split_data[seqnum]
-            segmentSend.setData(seqnum, data)
-            seqnum += 1
+                # since I am sending off 4 segments at once, I need to make sure that I receive an ACK before
+                # sending 4 segments off again!
+                segmentSend.setStartIteration(self.currentIteration)
+                segmentSend.setStartDelayIteration(4)
+                self.sendChannel.send(segmentSend)
+                self.currentSeqNum += 1
 
-            # since I am sending off 4 segments at once, I need to make sure that I receive an ACK before
-            # sending 4 segments off again!
-            segmentSend.setStartIteration(self.currentIteration)
-            segmentSend.setStartDelayIteration(4)
-            self.sendChannel.send(segmentSend)
-            self.currentSeqNum += 1
-        else:
-            print("Sending nothing")
-            return
+
+        #else:
+        #    print("Sending nothing")
+        #    return
 
 
     # ################################################################################################################ #
@@ -183,7 +192,7 @@ class RDTLayer(object):
     #                                                                                                                  #
     # ################################################################################################################ #
     def processReceiveAndSendRespond(self):
-        segmentAck = Segment()                  # Segment acknowledging packet(s) received
+
 
         # This call returns a list of incoming segments (see Segment class)...
         listIncomingSegments = self.receiveChannel.receive()
@@ -204,6 +213,8 @@ class RDTLayer(object):
             currentAck = listIncomingSegments[0].seqnum
 
             for i in range(0, len(listIncomingSegments)):
+                segmentAck = Segment()  # Segment acknowledging packet(s) received
+                # go through all the received packets
                 print(listIncomingSegments[i].acknum, self.currentSeqNum - 1)
                 # go through each incoming segment
                 if(listIncomingSegments[i].payload != ""):
@@ -214,14 +225,18 @@ class RDTLayer(object):
                         # checksum passed
                         currentAck += 1
                         segmentAck.setAck(currentAck)
-                        print("currentAck", currentAck)
                         self.sendChannel.send(segmentAck) # should send cumulative acknum
+                        print("CURRENT SEND CHANNEL", self.sendChannel.sendQueue)
                         self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload])
-                else:
-                    if(listIncomingSegments[i].acknum != self.currentSeqNum-1):
-                        print("resend packets", listIncomingSegments[i].acknum, "to", self.currentSeqNum-1 )
-                    else:
-                        print("Received ACK, we are OK")
+                    if(i == len(listIncomingSegments) - 1):
+                        # if we are at the end of the data, if currentAck == expectedAck change the window
+                        print("currentack",currentAck, "seqnum",listIncomingSegments[i].payload[1]+1)
+                        if(currentAck == (listIncomingSegments[i].payload[1])+1):
+                            print("change window")
+
+                        else:
+                            print("resend current window")
+                            self.currentSeqNum = self.currentWindowStart
         else:
             # has not received anything do nothing
             return
