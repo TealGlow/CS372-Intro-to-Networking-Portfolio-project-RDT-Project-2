@@ -54,6 +54,7 @@ class RDTLayer(object):
         self.dataToSend = ''
         self.currentIteration = 0
         # Add items as needed
+        self.countSegmentTimeouts = 0
 
     # ################################################################################################################ #
     # setSendChannel()                                                                                                 #
@@ -169,12 +170,12 @@ class RDTLayer(object):
                         break
                     """
 
-                    if(len(self.receiveChannel.receiveQueue) < 4):
-                        print("resetting seqnum")
-                        self.currentSeqNum = self.currentWindowStart
-                        self.expectedAck = self.currentSeqNum
-                        break
-                    if(self.expectedAck != self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum):
+                    #if(len(self.receiveChannel.receiveQueue) < 4):
+                    #    print("resetting seqnum")
+                    #    self.currentSeqNum = self.currentWindowStart
+                    #    self.expectedAck = self.currentSeqNum
+                    #    break
+                    if(self.expectedAck != self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum or len(self.receiveChannel.receiveQueue) < 4):
                         self.currentSeqNum = self.currentWindowStart
                         self.expectedAck = self.currentSeqNum
                         break
@@ -243,6 +244,7 @@ class RDTLayer(object):
         # if the item is an ack, then do nothing
         # if the item was not an ack, send an ack
 
+        resendWindow = False
 
         if(len(listIncomingSegments)>0):
             # if we have received ANYTHING deal with it here
