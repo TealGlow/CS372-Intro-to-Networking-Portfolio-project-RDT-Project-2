@@ -35,7 +35,7 @@ class RDTLayer(object):
     currentWindowStart = 0          # starting index for the window
     currentWindowEnd = 4            # ending index for current window
     currentSeqNum = 0
-    expectedAck = 0
+    expectedAck = 4
     iterationsWithoutAck = 0
     serverData = []
     resendWindow = False
@@ -55,6 +55,9 @@ class RDTLayer(object):
         self.currentIteration = 0
         # Add items as needed
         self.countSegmentTimeouts = 0
+        self.currAck = 0
+        self.winStart = 0
+        self.role = "server"
 
     # ################################################################################################################ #
     # setSendChannel()                                                                                                 #
@@ -157,10 +160,27 @@ class RDTLayer(object):
 
 
         if(len(self.receiveChannel.receiveQueue) > 0):
+            if(self.receiveChannel.receiveQueue[0].acknum != -1):
+                self.role = "client"
+                # if this is the client
+                acklist = self.receiveChannel.receive()
+                print(acklist[0].acknum,len(acklist), self.expectedAck)
+                if(acklist[0].acknum != self.expectedAck):
+                    print("resending window")
+                    self.currentSeqNum = self.currentWindowStart
+                    self.expectedAck = self.currentSeqNum + 4
+                else:
+                    self.expectedAck += 4
+        elif(len(self.receiveChannel.receiveQueue) == 0 and self.currentIteration >1 and self.role !="server"):
+            print("resending window")
+            # we did not rec an ack, it was dropped
+            self.currentSeqNum = self.currentWindowStart
+            """
             for j in range(len(self.receiveChannel.receiveQueue)):
                 if(self.receiveChannel.receiveQueue[j].payload == ""):
                     # get the received acks
-                    """
+            """
+            """
                     print("done", self.receiveChannel.receiveQueue[j].acknum, (self.currentWindowStart + j) + 1, self.expectedAck)
                     if(self.receiveChannel.receiveQueue[j].acknum != (self.currentWindowStart + j) + 1):
                         print("resetting seqnum")
@@ -168,20 +188,15 @@ class RDTLayer(object):
                         print("new seqnum", self.currentSeqNum)
                         checked = True
                         break
-                    """
-
-                    #if(len(self.receiveChannel.receiveQueue) < 4):
-                    #    print("resetting seqnum")
-                    #    self.currentSeqNum = self.currentWindowStart
-                    #    self.expectedAck = self.currentSeqNum
-                    #    break
-                    if(self.expectedAck != self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum or len(self.receiveChannel.receiveQueue) < 4):
+            """
+            """
+                    print("rec ack", self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum, self.expectedAck)
+                    if(self.expectedAck != self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum):
+                        print("resending window")
                         self.currentSeqNum = self.currentWindowStart
                         self.expectedAck = self.currentSeqNum
                         break
-                #if(checked == True):
-                #    break
-                    #else:
+            """
 
 
         seqnum = self.currentSeqNum # set up the current seqnum
@@ -210,7 +225,7 @@ class RDTLayer(object):
                 segmentSend.setStartDelayIteration(4)
                 self.sendChannel.send(segmentSend)
                 self.currentSeqNum += 1
-                self.expectedAck += 1
+                #self.expectedAck += 1
 
 
         #else:
@@ -248,9 +263,40 @@ class RDTLayer(object):
 
         if(len(listIncomingSegments)>0):
             # if we have received ANYTHING deal with it here
-            currentAck = listIncomingSegments[0].seqnum
+            currentAck = self.winStart
+            print(currentAck)
+            #currentAck = self.serverData[len(self.serverData)-1]
             prevData = ""
+            segmentAck = Segment()  # Segment acknowledging packet(s) received
+            print("QUEUE LENGTH", len(listIncomingSegments))
+            for i in range(0, len(listIncomingSegments)):
+                currentData = listIncomingSegments[i].payload
+                if (listIncomingSegments[i].payload != ""):
+                    print(listIncomingSegments[i].payload, listIncomingSegments[i].checkChecksum())
+                    print("GOING TO ACK")
 
+
+                    if (listIncomingSegments[i].checkChecksum() and currentData != prevData):
+                        # checksum passed
+                        # if(listIncomingSegments[i].seqnum == prevSeqNum+1 or prevSeqNum == listIncomingSegments[i].seqnum):
+                        #    print("prev ack passed")
+                        currentAck += 1
+
+                        if ([listIncomingSegments[i].seqnum, listIncomingSegments[i].payload] not in self.serverData):
+                            self.serverData.append([listIncomingSegments[i].seqnum, listIncomingSegments[i].payload])
+                    else:
+                        resendWindow = True
+
+                    prevData = currentData
+            print(currentAck)
+            if(currentAck % 4 == 0 and currentAck != 0 and resendWindow == False):
+                self.currAck += 4
+                self.currentWindowStart = self.currentWindowEnd
+                self.winStart +=4
+            segmentAck.setAck(currentAck)
+            self.sendChannel.send(segmentAck)  # should send cumulative acknum
+
+            """
             for i in range(0, len(listIncomingSegments)):
                 segmentAck = Segment()  # Segment acknowledging packet(s) received
                 # go through each incoming segment
@@ -259,7 +305,6 @@ class RDTLayer(object):
                     # if the item was not an ACK, we need to send an ACK
                     print(listIncomingSegments[i].payload, listIncomingSegments[i].checkChecksum())
                     print("GOING TO ACK")
-                    #print(prevSeqNum)
                     if(listIncomingSegments[i].checkChecksum() and currentData != prevData):
                         # checksum passed
                         #if(listIncomingSegments[i].seqnum == prevSeqNum+1 or prevSeqNum == listIncomingSegments[i].seqnum):
@@ -270,6 +315,7 @@ class RDTLayer(object):
                         if([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload] not in self.serverData):
                             self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload])
                 prevData = currentData
+            """
         else:
             # has not received anything do nothing
             return
@@ -296,3 +342,13 @@ class RDTLayer(object):
 
         # Use the unreliable sendChannel to send the ack packet
         #self.sendChannel.send(segmentAck)
+
+    def findFirstNonAckSeqnum(self, recList):
+        """
+        Function that finds the first non-ack
+        :param recList:
+        :return:
+        """
+        for i in range(len(recList)):
+            if(recList[i].payload !=""):
+                return recList[i].seqnum
