@@ -35,7 +35,7 @@ class RDTLayer(object):
     currentWindowStart = 0          # starting index for the window
     currentWindowEnd = 4            # ending index for current window
     currentSeqNum = 0
-    prevAck = 0
+    expectedAck = 0
     iterationsWithoutAck = 0
     serverData = []
 
@@ -152,7 +152,12 @@ class RDTLayer(object):
             for j in range(len(self.receiveChannel.receiveQueue)):
                 if(self.receiveChannel.receiveQueue[j].payload == ""):
                     # get the received acks
-                    print("REC QUEUE",self.receiveChannel.receiveQueue[j].acknum)
+                    print("done")
+                    if(self.receiveChannel.receiveQueue[j].acknum != (self.currentWindowStart + j) + 1):
+                        self.currentSeqNum = self.currentWindowStart
+                    else:
+                        self.currentWindowStart = self.currentWindowEnd
+                        self.currentWindowEnd += 3
 
         seqnum = self.currentSeqNum # set up the current seqnum
 
@@ -166,6 +171,7 @@ class RDTLayer(object):
                 # 15 / 4 = 3.75 and I am rounding up
 
                 # packet data, packet num in sequence, current window start (index in data that we started), current window end, True if data packet
+
                 data = [split_data[seqnum],i, self.currentWindowStart, self.currentWindowEnd, True]
                 segmentSend.setData(seqnum, data)
                 seqnum += 1
@@ -176,6 +182,7 @@ class RDTLayer(object):
                 segmentSend.setStartDelayIteration(4)
                 self.sendChannel.send(segmentSend)
                 self.currentSeqNum += 1
+                self.expectedAck += 1
 
 
         #else:
@@ -211,32 +218,34 @@ class RDTLayer(object):
         if(len(listIncomingSegments)>0):
             # if we have received ANYTHING deal with it here
             currentAck = listIncomingSegments[0].seqnum
+            #prevSeqNum = listIncomingSegments[0].seqnum
 
             for i in range(0, len(listIncomingSegments)):
                 segmentAck = Segment()  # Segment acknowledging packet(s) received
-                # go through all the received packets
-                print(listIncomingSegments[i].acknum, self.currentSeqNum - 1)
                 # go through each incoming segment
                 if(listIncomingSegments[i].payload != ""):
                     # if the item was not an ACK, we need to send an ACK
                     print(listIncomingSegments[i].payload, listIncomingSegments[i].checkChecksum())
-
+                    #print(prevSeqNum)
                     if(listIncomingSegments[i].checkChecksum()):
                         # checksum passed
+                        #if(listIncomingSegments[i].seqnum == prevSeqNum+1 or prevSeqNum == listIncomingSegments[i].seqnum):
+                        #    print("prev ack passed")
                         currentAck += 1
                         segmentAck.setAck(currentAck)
                         self.sendChannel.send(segmentAck) # should send cumulative acknum
-                        print("CURRENT SEND CHANNEL", self.sendChannel.sendQueue)
-                        self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload])
-                    if(i == len(listIncomingSegments) - 1):
+                        if([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload] not in self.serverData):
+                            self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload])
+                    #prevSeqNum = listIncomingSegments[i].seqnum
+                    #if(i == len(listIncomingSegments) - 1):
                         # if we are at the end of the data, if currentAck == expectedAck change the window
-                        print("currentack",currentAck, "seqnum",listIncomingSegments[i].payload[1]+1)
-                        if(currentAck == (listIncomingSegments[i].payload[1])+1):
-                            print("change window")
+                    #    print("currentack",currentAck, "seqnum",listIncomingSegments[i].payload[1]+1)
+                    #    if(currentAck == (listIncomingSegments[i].payload[1])+1):
+                    #        print("change window")
 
-                        else:
-                            print("resend current window")
-                            self.currentSeqNum = self.currentWindowStart
+                    #    else:
+                    #        print("resend current window")
+                    #        self.currentSeqNum = self.currentWindowStart
         else:
             # has not received anything do nothing
             return
