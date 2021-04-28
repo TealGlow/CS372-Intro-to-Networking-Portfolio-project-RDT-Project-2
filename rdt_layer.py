@@ -38,6 +38,7 @@ class RDTLayer(object):
     expectedAck = 0
     iterationsWithoutAck = 0
     serverData = []
+    resendWindow = False
 
     # ################################################################################################################ #
     # __init__()                                                                                                       #
@@ -99,9 +100,14 @@ class RDTLayer(object):
         # ############################################################################################################ #
         # Identify the data that has been received...
         print('getDataReceived(): Complete this...')
-        print(self.serverData)
+        sortedData = sorted(self.serverData)
+        print("SERVER DATA",self.serverData)
+        print("SORTED SERVER DATA", sortedData)
+        sortedString = ""
+        for i in range(len(sortedData)):
+            sortedString += sortedData[i][1]
         # ############################################################################################################ #
-        return ""
+        return sortedString
 
     # ################################################################################################################ #
     # processData()                                                                                                    #
@@ -148,18 +154,39 @@ class RDTLayer(object):
         # create the segment
         # send the segment
 
+
         if(len(self.receiveChannel.receiveQueue) > 0):
+            checked = False
             for j in range(len(self.receiveChannel.receiveQueue)):
                 if(self.receiveChannel.receiveQueue[j].payload == ""):
                     # get the received acks
-                    print("done")
+                    """
+                    print("done", self.receiveChannel.receiveQueue[j].acknum, (self.currentWindowStart + j) + 1, self.expectedAck)
                     if(self.receiveChannel.receiveQueue[j].acknum != (self.currentWindowStart + j) + 1):
+                        print("resetting seqnum")
                         self.currentSeqNum = self.currentWindowStart
-                    else:
-                        self.currentWindowStart = self.currentWindowEnd
-                        self.currentWindowEnd += 3
+                        print("new seqnum", self.currentSeqNum)
+                        checked = True
+                        break
+                    """
+
+                    if(len(self.receiveChannel.receiveQueue) < 4):
+                        print("resetting seqnum")
+                        self.currentSeqNum = self.currentWindowStart
+                        self.expectedAck = self.currentSeqNum
+                        break
+                    elif(self.expectedAck != self.receiveChannel.receiveQueue[len(self.receiveChannel.receiveQueue)-1].acknum):
+                        self.currentSeqNum = self.currentWindowStart
+                        self.expectedAck = self.currentSeqNum
+                        break
+                #if(checked == True):
+                #    break
+                    #else:
+
 
         seqnum = self.currentSeqNum # set up the current seqnum
+        self.currentWindowStart = seqnum
+        self.currentWindowEnd = seqnum + 4
 
         for i in range(self.currentWindowStart, self.currentWindowEnd):
             if (self.dataToSend != "" and seqnum < len(split_data)):
@@ -188,6 +215,8 @@ class RDTLayer(object):
         #else:
         #    print("Sending nothing")
         #    return
+
+
 
 
     # ################################################################################################################ #
@@ -234,8 +263,10 @@ class RDTLayer(object):
                         currentAck += 1
                         segmentAck.setAck(currentAck)
                         self.sendChannel.send(segmentAck) # should send cumulative acknum
-                        if([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload] not in self.serverData):
-                            self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload])
+                        if([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload[0]] not in self.serverData):
+                            self.serverData.append([listIncomingSegments[i].seqnum,listIncomingSegments[i].payload[0]])
+                        #if(not self.serverData[listIncomingSegments[i].seqnum]):
+                        #    self.serverData[listIncomingSegments[i].seqnum] = listIncomingSegments[i].payload
                     #prevSeqNum = listIncomingSegments[i].seqnum
                     #if(i == len(listIncomingSegments) - 1):
                         # if we are at the end of the data, if currentAck == expectedAck change the window
