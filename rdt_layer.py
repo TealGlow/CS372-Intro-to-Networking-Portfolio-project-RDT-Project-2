@@ -165,20 +165,21 @@ class RDTLayer(object):
         # send the segment
 
 
-        print(self.receiveChannel.receiveQueue)
+        print(self.receiveChannel.receiveQueue,"hi")
         if(self.currentIteration > 1 and len(self.receiveChannel.receiveQueue ) == 0):
             # if we have gone 1 iteration without an ack we resend current window
-            print("No ack, resending current window")
-            self.currentSeqNum = self.winStart
-            #self.role = "Client"
+            print("No ACK, resending current window")
+            self.currentSeqNum = self.currentWindow[0]
+
+
         if (len(self.receiveChannel.receiveQueue) > 0):
-
+            # if the rec queue has an item in it
             if (self.receiveChannel.receiveQueue[0].acknum != -1):
-                print("checking")
-                acklist = self.receiveChannel.receive()
+                # if the received channel first item is an ack
+                acklist = self.receiveChannel.receive() # check the entire acklist
                 self.checkReceivedAck(acklist)
-        #        self.role = "client"
 
+        # else set the seqnum that we are iterating thru to the currentSeqNum
         seqnum = self.currentSeqNum  # set up the current seqnum
         self.winStart = seqnum
         self.winEnd = seqnum + 4
@@ -188,24 +189,37 @@ class RDTLayer(object):
 
 
             print("SENDING WINDOW", self.winStart, self.winEnd)
-            # TODO: make sure only the client sends these
-            # TODO: stop the window from advancing every time
             self.sendData(self.winStart, self.winEnd, seqnum, split_data)
 
 
 
     def checkReceivedAck(self, toCheck):
+        """
+        Checks the acknums if any of them is the expected acknum then advance the window
+        :param toCheck:
+        :return:
+        """
         # gets an array of the received data
         for i in range(0, len(toCheck)):
             if(toCheck[i].acknum == self.expectedAck):
                 self.currentSeqNum += 4
-                self.expectedAck+=4
+                self.expectedAck += 4
                 self.currentWindow[0] += 4
                 self.currentWindow[1] += 4
-        return True
+        return
 
 
     def sendData(self, wStart, wEnd, seqnum, dataArr):
+        """
+        Iterates through a loop, makes the packet of items from window start to window end and sends them on the
+        channel.
+
+        :param wStart:
+        :param wEnd:
+        :param seqnum:
+        :param dataArr:
+        :return:
+        """
         for i in range(wStart, wEnd):
             if (self.dataToSend != "" and seqnum < len(dataArr)):
                 segmentSend = Segment()
@@ -240,6 +254,7 @@ class RDTLayer(object):
     #                                                                                                                  #
     # ################################################################################################################ #
     def processReceiveAndSendRespond(self):
+
 
 
         # This call returns a list of incoming segments (see Segment class)...
@@ -309,55 +324,66 @@ class RDTLayer(object):
 
 
     def tempDisplayDataRec(self, toDisplay):
+        """
+        Function that displays the current payloads for all the items in the list if they exist
+        :param toDisplay:
+        :return:
+        """
         for i in range(len(toDisplay)):
             if(toDisplay[i].payload !=""):
-                print(toDisplay[i].payload)
+                print(toDisplay[i].seqnum,toDisplay[i].payload)
 
 
     def processReceivedList(self, toProcess):
+        """
+        Function that removes duplicate items, and items that do not pass the check sum, returns the list of
+        unique items along with the acknum
+        :param toProcess:
+        :return:
+        """
         uniqueToProcess = []
+        temp = []
         newList = []
         prevData=""
         newAck = self.winStart
 
-        for j in range(0, len(toProcess)):
-            # removes duplicates from the list
-            if toProcess[j] not in uniqueToProcess and [toProcess[j].seqnum,toProcess[j].payload] not in self.serverData:
-                uniqueToProcess.append(toProcess[j])
-        print("current window", self.currentWindow)
-        print("uni to process", uniqueToProcess)
-        self.tempDisplayDataRec(uniqueToProcess)
-        """
         for i in range(len(toProcess)):
-            currentData = toProcess[i]
-            if(toProcess[i].payload != "" and toProcess[i].checkChecksum() and currentData not in newList):
-                newAck += 1
-                newList.append(toProcess[i])
+            if(toProcess[i].payload != ""):
+                # if the payload is not an ack, keep it
+                temp.append(toProcess[i])
 
-            prevData = currentData
-        """
-        """
-        print("uni", uniqueToProcess)
-        if(len(uniqueToProcess) == 0):
-            return newList, 4
-        for i in range(len(uniqueToProcess)):
-            currentData = uniqueToProcess[i]
-            if (uniqueToProcess[i].payload != "" and uniqueToProcess[i].checkChecksum() and currentData not in newList):
-                newAck += 1
-                newList.append(uniqueToProcess[i])
-
-            prevData = currentData
+        for j in range(len(temp)):
+            if(temp[j].checkChecksum() == True):
+                # if it passes the checksum
+                uniqueToProcess.append(temp[j])
+        print("displaying uni", uniqueToProcess)
+        self.tempDisplayDataRec(uniqueToProcess)
+        temp = []
+        for h in range(len(uniqueToProcess)):
+            # if it belongs in this window
+            if(self.currentWindow[0]<=(uniqueToProcess[h].seqnum)<= self.currentWindow[1]):
+                temp.append(uniqueToProcess[h])
+        print("TEMP", temp)
+        uniqueToProcess = []
+        for n in range(len(temp)):
+            if(temp[n] not in newList):
+                newList.append(temp[n])
 
         if(len(newList) > 4):
             return newList, 0
-        """
-        #return newList, newAck
+        print("NEW LEN", len(newList))
+        return newList, len(newList)
 
-        return newList, 4
 
 
 
     def addNewListToServerData(self, toAdd):
+        """
+        Goes through the list passed in and adds it to the server data variable with
+        sequence number and payload so that it can be sorted
+        :param toAdd:
+        :return:
+        """
         print("TO ADD", toAdd)
         for i in range(len(toAdd)):
             if ([toAdd[i].seqnum, toAdd[i].payload] not in self.serverData):
