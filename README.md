@@ -2,6 +2,11 @@
 
 Not the best but it simulates client sending data to a server using RDT.
 
+Notes:
+- Developed in PyCharm Community Edition.
+- Using Python 3.9 Interpreter.
+- By default it is set so that all the options are turned on and the largest text is being sent.
+
 How it works:
 - Sends a number of packages within its window (window size of 4 packages)
 - Waits for server ack back
