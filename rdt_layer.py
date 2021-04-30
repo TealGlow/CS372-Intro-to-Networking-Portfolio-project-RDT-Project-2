@@ -38,6 +38,7 @@ class RDTLayer(object):
     iterationsWithoutAck = 0
     serverData = []
     resendWindow = False
+    done = False
 
     # ################################################################################################################ #
     # __init__()                                                                                                       #
@@ -192,12 +193,11 @@ class RDTLayer(object):
         self.winStart = seqnum
         self.winEnd = seqnum + 4
 
+
         if(self.role != "server"):
 
-
-
             print("SENDING WINDOW", self.winStart, self.winEnd)
-            self.sendData(self.winStart, self.winEnd, seqnum, split_data)
+            self.sendData(self.winStart, self.winEnd, seqnum, split_data, len(split_data))
 
 
 
@@ -218,7 +218,7 @@ class RDTLayer(object):
         return
 
 
-    def sendData(self, wStart, wEnd, seqnum, dataArr):
+    def sendData(self, wStart, wEnd, seqnum, dataArr, dataSize):
         """
         Iterates through a loop, makes the packet of items from window start to window end and sends them on the
         channel.
@@ -250,7 +250,9 @@ class RDTLayer(object):
                 segmentSend.setStartIteration(self.currentIteration)
                 segmentSend.setStartDelayIteration(4)
                 self.sendChannel.send(segmentSend)
-                #self.currentSeqNum += 1
+        #if(wEnd > len(dataSize)):
+            # create a new packet that signals to the server that we are done with the payload "Done"
+        #    segmentSend = Segment()
         return
 
 
@@ -274,64 +276,34 @@ class RDTLayer(object):
         # How will you get them back in order?
         # This is where a majority of your logic will be implemented
         print('processReceive(): Complete this...')
-        print(listIncomingSegments)
-
-
 
         if(len(listIncomingSegments) > 0):
             segmentAck = Segment()  # Segment acknowledging packet(s) received
 
-            print("THINGS ARE HAPPENING)")
-            self.tempDisplayDataRec(listIncomingSegments)
+
             currentAck = self.currentWindow[0]
             self.expectedAck = self.currentWindow[1]
-            print("CURRENTACK", currentAck)
 
             newList, recAck = self.processReceivedList(listIncomingSegments) # returns a processed list of packets we actually got
             # check if what we are receiving is an ack,
             # if the item is an ack, then do nothing
             # if the item was not an ack, send an ack
-            print("RECACK", recAck)
-            currentAck += recAck
-            print(currentAck, self.expectedAck)
 
+            currentAck += recAck
+
+            if(self.done == True):
+                self.addNewListToServerData(newList)
 
             if(currentAck == self.expectedAck):
-                print("advancing the window")
                 self.winStart += 4
-                print(self.winStart)
                 self.currAck = self.currAck + 4
-                #self.addNewListToServerData(newList)
-                #segmentAck.setAck(currentAck)
-                #self.sendChannel.send(segmentAck)  # should send cumulative acknum
-                self.addNewListToServerData(newList)
                 segmentAck.setAck(currentAck)
+                print("Sending ack: ", segmentAck.to_string())
                 self.sendChannel.send(segmentAck)  # should send cumulative acknum
-            #else:
-            #    currentAck -= 4
+            self.addNewListToServerData(newList)
         else:
             return
 
-
-
-
-        # ############################################################################################################ #
-        # How do you respond to what you have received?
-        # How can you tell data segments apart from ack segemnts?
-        #print('processReceive(): Complete this...')
-
-        # Somewhere in here you will be setting the contents of the ack segments to send.
-        # The goal is to employ cumulative ack, just like TCP does...
-
-
-
-        # ############################################################################################################ #
-        # Display response segment
-        #segmentAck.setAck(acknum)
-        #print("Sending ack: ", segmentAck.to_string())
-
-        # Use the unreliable sendChannel to send the ack packet
-        #self.sendChannel.send(segmentAck)
 
 
     def tempDisplayDataRec(self, toDisplay):
@@ -352,6 +324,7 @@ class RDTLayer(object):
         :param toProcess:
         :return:
         """
+        seqAndPayloadList = []
         uniqueToProcess = []
         temp = []
         newList = []
@@ -359,32 +332,17 @@ class RDTLayer(object):
         newAck = self.winStart
 
         for i in range(len(toProcess)):
-            if(toProcess[i].payload != ""):
-                # if the payload is not an ack, keep it
-                temp.append(toProcess[i])
+            if(toProcess[i].payload!="" and toProcess[i].checkChecksum() == True):
+                seqAndPayloadList.append([toProcess[i].seqnum, toProcess[i].payload])
 
-        for j in range(len(temp)):
-            if(temp[j].checkChecksum() == True):
-                # if it passes the checksum
-                uniqueToProcess.append(temp[j])
-        print("displaying uni", uniqueToProcess)
-        self.tempDisplayDataRec(uniqueToProcess)
-        temp = []
-        for h in range(len(uniqueToProcess)):
-            # if it belongs in this window
-            if(self.currentWindow[0]<=(uniqueToProcess[h].seqnum)<= self.currentWindow[1]):
-                temp.append(uniqueToProcess[h])
-        print("TEMP", temp)
-        uniqueToProcess = []
-        for n in range(len(temp)):
-            if(temp[n] not in newList):
-                newList.append(temp[n])
 
-        if(len(newList) > 4):
-            return newList, 0
-        print("NEW LEN", len(newList))
-        return newList, len(newList)
+        for j in range(len(seqAndPayloadList)):
+            # get the unique items
+            if(seqAndPayloadList[j] not in uniqueToProcess and (self.currentWindow[0]<=seqAndPayloadList[j][0] <= self.currentWindow[1])):
+                uniqueToProcess.append(seqAndPayloadList[j])
+        #print(uniqueToProcess)
 
+        return uniqueToProcess, len(uniqueToProcess)
 
 
 
@@ -395,7 +353,7 @@ class RDTLayer(object):
         :param toAdd:
         :return:
         """
-        print("TO ADD", toAdd)
+        #print("TO ADD", toAdd)
         for i in range(len(toAdd)):
-            if ([toAdd[i].seqnum, toAdd[i].payload] not in self.serverData):
-                self.serverData.append([toAdd[i].seqnum, toAdd[i].payload])
+            if(toAdd[i] not in self.serverData):
+                self.serverData.append(toAdd[i])
