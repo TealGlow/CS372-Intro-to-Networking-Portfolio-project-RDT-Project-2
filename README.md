@@ -2,9 +2,12 @@
 
 Not the best but it simulates client sending data to a server using RDT.
 
-Alyssa Comstock
+<strong>Alyssa Comstock
+<br/>
 CS372 - Intro to Computer Networking
-Project 2 - RDT Layer
+<br/>
+Project 2 - RDT Layer</strong>
+<br/>
 
 Notes:
 - Developed in PyCharm Community Edition.
