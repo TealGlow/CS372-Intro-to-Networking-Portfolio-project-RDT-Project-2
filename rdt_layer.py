@@ -58,6 +58,7 @@ class RDTLayer(object):
         self.winStart = 0
         self.winEnd = 4
         self.role = "server"
+        self.waitTime = 0
         currentWindowStart = 0  # starting index for the window
         currentWindowEnd = 4  # ending index for current window
 
@@ -169,15 +170,22 @@ class RDTLayer(object):
         if(self.currentIteration > 1 and len(self.receiveChannel.receiveQueue ) == 0):
             # if we have gone 1 iteration without an ack we resend current window
             print("No ACK, resending current window")
-            self.currentSeqNum = self.currentWindow[0]
+            if(self.waitTime == 3):
+                # resend the window if we hit the timeout window
+                self.currentSeqNum = self.currentWindow[0]
+            else:
+                print("Waiting")
+                self.waitTime += 1
+                return
 
 
-        if (len(self.receiveChannel.receiveQueue) > 0):
+        if (len(self.receiveChannel.receiveQueue) > 0 and self.role == "Client"):
             # if the rec queue has an item in it
-            if (self.receiveChannel.receiveQueue[0].acknum != -1):
+            # DO NOT BASE IT ON THE FIRST ITEM BEING AN ACK
+            #if (self.receiveChannel.receiveQueue[0].acknum != -1):
                 # if the received channel first item is an ack
-                acklist = self.receiveChannel.receive() # check the entire acklist
-                self.checkReceivedAck(acklist)
+            acklist = self.receiveChannel.receive() # check the entire acklist
+            self.checkReceivedAck(acklist)
 
         # else set the seqnum that we are iterating thru to the currentSeqNum
         seqnum = self.currentSeqNum  # set up the current seqnum
@@ -201,6 +209,7 @@ class RDTLayer(object):
         """
         # gets an array of the received data
         for i in range(0, len(toCheck)):
+            print(toCheck[i].acknum)
             if(toCheck[i].acknum == self.expectedAck):
                 self.currentSeqNum += 4
                 self.expectedAck += 4
@@ -266,6 +275,8 @@ class RDTLayer(object):
         # This is where a majority of your logic will be implemented
         print('processReceive(): Complete this...')
         print(listIncomingSegments)
+
+
 
         if(len(listIncomingSegments) > 0):
             segmentAck = Segment()  # Segment acknowledging packet(s) received
