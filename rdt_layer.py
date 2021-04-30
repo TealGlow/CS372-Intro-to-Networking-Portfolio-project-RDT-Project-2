@@ -182,7 +182,7 @@ class RDTLayer(object):
     def checkReceivedAck(self, toCheck):
         """
         Checks the acknums if any of them is the expected acknum then advance the window
-        :param toCheck:
+        :param toCheck: List of items to check the acknum of
         :return:
         """
 
@@ -202,10 +202,10 @@ class RDTLayer(object):
         Iterates through a loop, makes the packet of items from window start to window end and sends them on the
         channel.
 
-        :param wStart:
-        :param wEnd:
-        :param seqnum:
-        :param dataArr:
+        :param wStart: window start
+        :param wEnd: window end
+        :param seqnum: sequence number
+        :param dataArr: array of data to make packages of
         :return:
         """
 
@@ -271,6 +271,8 @@ class RDTLayer(object):
                 self.currAck = self.currAck + 4
                 segmentAck.setAck(currentAck)
                 self.sendChannel.send(segmentAck)  # should send cumulative acknum
+            # add the items to the serverData variable, this function will make sure its not already in the
+            # server data so that there are no dupes
             self.addNewListToServerData(newList)
         else:
             return
@@ -279,8 +281,9 @@ class RDTLayer(object):
 
     def tempDisplayDataRec(self, toDisplay):
         """
-        Function that displays the current payloads for all the items in the list if they exist
-        :param toDisplay:
+        Function that displays the current payloads for all the items in the list if they exist.
+        This is for testing purposes.
+        :param toDisplay: items to display
         :return:
         """
         for i in range(len(toDisplay)):
@@ -303,16 +306,20 @@ class RDTLayer(object):
 
 
         for i in range(len(toProcess)):
+            # if the payload is not empty, and it passes the checksum, then we add it
+            # to the array in form of [seqnum, payload] so its an array of form:
+            #seqAndPayloadList=[[seqnum,payload],[seqnum,payload],[seqnum,payload],...,[seqnum,payload]]
             if(toProcess[i].payload!="" and toProcess[i].checkChecksum() == True):
                 seqAndPayloadList.append([toProcess[i].seqnum, toProcess[i].payload])
 
 
         for j in range(len(seqAndPayloadList)):
-            # get the unique items
+            # get the unique items, so dupes will not be counted
             if(seqAndPayloadList[j] not in uniqueToProcess and (self.currentWindow[0]<=seqAndPayloadList[j][0] <= self.currentWindow[1])):
                 uniqueToProcess.append(seqAndPayloadList[j])
 
-
+        # acknum is number of items we have left, or the number of unique packets
+        # that passed the checksum, have data, are supposed to exist within this window, and not duplicate.
         return uniqueToProcess, len(uniqueToProcess)
 
 
@@ -327,4 +334,5 @@ class RDTLayer(object):
 
         for i in range(len(toAdd)):
             if(toAdd[i] not in self.serverData):
+                # another check if they are not already in the server data
                 self.serverData.append(toAdd[i])
