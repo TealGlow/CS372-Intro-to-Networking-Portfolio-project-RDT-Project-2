@@ -1,6 +1,7 @@
 # Networking-RDT-Project-2
 
-Not the best but it simulates client sending data to a server using RDT.
+Portfolio project CS372 - INTO TO COMPUTER NETWORKS.
+
 
 <strong>Alyssa Comstock
 <br/>
